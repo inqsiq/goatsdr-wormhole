@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GoatSDR // Симулятор Моста Эйнштейна — Розена</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --panel-bg: #121722;
+            --accent-cyan: #00f0ff;
+            --accent-amber: #ffb703;
+            --accent-green: #00ff66;
+            --accent-purple: #b565ff;
+            --accent-red: #ff2a55;
+            --text-main: #e2e8f0;
+            --text-dim: #718096;
+            --border-color: #1e293b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", monospace;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            padding-bottom: 24px;
+        }
+
+        .app-shell {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Header */
+        header {
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            letter-spacing: 0.8px;
+            color: var(--accent-cyan);
+        }
+
+        .status-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(255, 42, 85, 0.12);
+            color: var(--accent-red);
+            font-family: monospace;
+            border: 1px solid var(--accent-red);
+            font-weight: bold;
+            transition: all 0.25s ease;
+        }
+
+        .status-badge.quantum {
+            background: rgba(255, 183, 3, 0.12);
+            color: var(--accent-amber);
+            border-color: var(--accent-amber);
+        }
+
+        .status-badge.stable {
+            background: rgba(0, 255, 102, 0.12);
+            color: var(--accent-green);
+            border-color: var(--accent-green);
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.25);
+        }
+
+        /* Displays Area */
+        .screen-container {
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Telemetry Readout Grid */
+        .telemetry-panel {
+            background: #080c12;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.05);
+        }
+
+        .tele-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .tele-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-family: monospace;
+            letter-spacing: 0.5px;
+        }
+
+        .tele-val {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+        }
+
+        .tele-sub {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-family: monospace;
+        }
+
+        .stability-bar-bg {
+            width: 100%;
+            height: 7px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 3px;
+        }
+
+        .stability-bar-fill {
+            height: 100%;
+            width: 15%;
+            background: linear-gradient(90deg, #ff2a55, #ffb703, #00ff66, #00f0ff);
+            transition: width 0.15s ease;
+        }
+
+        /* Canvas Boxes */
+        .canvas-box {
+            background: #05070a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.85);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+        }
+
+        .canvas-label {
+            position: absolute;
+            top: 6px;
+            left: 8px;
+            font-size: 10px;
+            font-family: monospace;
+            color: var(--text-dim);
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            z-index: 5;
+            background: rgba(5, 7, 10, 0.65);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .canvas-hint {
+            position: absolute;
+            bottom: 6px;
+            right: 8px;
+            font-size: 10px;
+            font-family: monospace;
+            color: var(--accent-cyan);
+            opacity: 0.7;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Controls */
+        .controls {
+            padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .power-btn, .ping-btn {
+            border: none;
+            padding: 12px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            transition: transform 0.1s, filter 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .power-btn {
+            background: linear-gradient(135deg, #00838f, #00b4d8);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(0, 180, 216, 0.25);
+        }
+
+        .power-btn.on {
+            background: linear-gradient(135deg, #e63946, #d90429);
+            box-shadow: 0 4px 14px rgba(230, 57, 70, 0.35);
+        }
+
+        .ping-btn {
+            background: linear-gradient(135deg, #6d28d9, #9333ea);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(147, 51, 234, 0.3);
+            border: 1px solid rgba(181, 101, 255, 0.4);
+        }
+
+        .power-btn:active, .ping-btn:active {
+            transform: scale(0.97);
+        }
+
+        .slider-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: monospace;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        #exoticSlider::-webkit-slider-thumb {
+            background: var(--accent-purple);
+            box-shadow: 0 0 10px var(--accent-purple);
+        }
+
+        /* Preset buttons */
+        .presets-title {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            font-family: monospace;
+            margin-top: 2px;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .preset-btn {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            text-align: left;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .preset-btn:active, .preset-btn.active {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 240, 255, 0.08);
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.12);
+        }
+
+        .preset-tag {
+            font-family: monospace;
+            font-size: 10px;
+            color: var(--accent-amber);
+            font-weight: bold;
+        }
+
+        /* Info Dossier Card */
+        .info-card {
+            margin: 12px 16px 0 16px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .info-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--accent-cyan);
+            margin-bottom: 6px;
+            font-family: monospace;
+        }
+
+        .info-desc {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+
+        .formula-box {
+            margin-top: 8px;
+            padding: 6px 10px;
+            background: #080c12;
+            border-left: 3px solid var(--accent-purple);
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #e2e8f0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <header>
+        <div class="brand">
+            <span>🐐 GoatSDR</span>
+            <span style="color:var(--text-dim);font-weight:normal;font-size:12px;">// ER-BRIDGE v2.0</span>
+        </div>
+        <div id="statusBadge" class="status-badge">HORIZON COLLAPSED</div>
+    </header>
+
+    <!-- Module Switcher -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 16px 0 16px;">
+        <a href="index.html" style="text-decoration:none; text-align:center; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; font-family:monospace; background:var(--panel-bg); color:var(--text-dim); border:1px solid var(--border-color);">📡 ОРБИТАЛЬНЫЙ СКАНЕР</a>
+        <a href="wormhole.html" style="text-decoration:none; text-align:center; padding:8px; border-radius:6px; font-size:11px; font-weight:bold; font-family:monospace; background:rgba(0,240,255,0.12); color:var(--accent-cyan); border:1px solid var(--accent-cyan);">🕳 МОСТ ЭЙНШТЕЙНА–РОЗЕНА</a>
+    </div>
+
+    <div class="screen-container">
+        <!-- Telemetry Readout -->
+        <div class="telemetry-panel">
+            <div class="tele-item">
+                <span class="tele-label">РАДИУС ГОРЛОВИНЫ (r₀)</span>
+                <div>
+                    <span id="throatVal" class="tele-val">0.00</span>
+                    <span class="tele-sub">км</span>
+                </div>
+                <span id="horizonSub" class="tele-sub">Сингулярность r_s = 147.7 км</span>
+            </div>
+            <div class="tele-item">
+                <span class="tele-label">ПРОХОЖДЕНИЕ 1420 МГц: <span id="txPercent" style="color:var(--accent-red);">0%</span></span>
+                <div class="stability-bar-bg">
+                    <div id="stabilityFill" class="stability-bar-fill"></div>
+                </div>
+                <span id="redshiftSub" class="tele-sub" style="margin-top:4px;">Смещение: Сигнал поглощён</span>
+            </div>
+        </div>
+
+        <!-- 3D Wormhole Embedding Diagram -->
+        <div class="canvas-box" style="height: 235px; cursor: grab;" id="wormholeBox">
+            <span class="canvas-label">3D METRIC TOPOLOGY // МОСТ ЭЙНШТЕЙНА — РОЗЕНА</span>
+            <span class="canvas-hint">↻ Вращайте пальцем / мышью</span>
+            <canvas id="wormholeCanvas" height="235"></canvas>
+        </div>
+
+        <!-- Oscilloscope & Gravitational Redshift Waterfall -->
+        <div class="canvas-box" style="height: 95px;">
+            <span class="canvas-label">SDR PROBE // ОГИБАЮЩАЯ РАДИОСИГНАЛА И ДОПЛЕР-СПЕКТР</span>
+            <canvas id="scopeCanvas" height="95"></canvas>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <div class="btn-row">
+            <button id="powerBtn" class="power-btn">🔊 ЗВУК МЕТРИКИ</button>
+            <button id="pingBtn" class="ping-btn">📡 ИМПУЛЬС 1420 МГц</button>
+        </div>
+
+        <!-- Exotic Matter Slider -->
+        <div class="slider-box">
+            <div class="slider-label">
+                <span>ЭКЗОТИЧЕСКАЯ МАТЕРИЯ (КАЗИМИР-ПОЛЕ, ρ &lt; 0)</span>
+                <span id="exoticHint" style="color:var(--accent-purple); font-weight:bold;">0% (0.0 Дж/м³)</span>
+            </div>
+            <input type="range" id="exoticSlider" min="0" max="100" step="1" value="0">
+        </div>
+
+        <!-- Mass Curvature Slider -->
+        <div class="slider-box">
+            <div class="slider-label">
+                <span>МАССА УЗЛА ИСКРИВЛЕНИЯ (M / M☉)</span>
+                <span id="massHint" style="color:var(--accent-cyan); font-weight:bold;">50 M☉</span>
+            </div>
+            <input type="range" id="massSlider" min="10" max="500" step="5" value="50">
+        </div>
+
+        <div class="presets-title">ПРЕСЕТЫ ПРОСТРАНСТВА-ВРЕМЕНИ:</div>
+        <div class="presets-grid">
+            <button class="preset-btn active" data-exotic="0" data-mass="50" data-id="schwarzschild">
+                <span class="preset-tag">1935 • ШВАРЦШИЛЬД</span>
+                <span>Классический мост 🕳</span>
+            </button>
+            <button class="preset-btn" data-exotic="38" data-mass="15" data-id="wheeler">
+                <span class="preset-tag">1957 • УИЛЕР</span>
+                <span>Квантовая пена ⚡️</span>
+            </button>
+            <button class="preset-btn" data-exotic="88" data-mass="120" data-id="morris">
+                <span class="preset-tag">1988 • МОРРИС — ТОРН</span>
+                <span>Проходимый портал 🌌</span>
+            </button>
+            <button class="preset-btn" data-exotic="98" data-mass="450" data-id="gargantua">
+                <span class="preset-tag">2014 • ГАРГАНТЮА</span>
+                <span>Сверхмассивный узел 🪐</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Dossier Card -->
+    <div id="infoCard" class="info-card">
+        <div class="info-header">
+            <span id="infoTitle">🕳 КЛАССИЧЕСКИЙ МОСТ ЭЙНШТЕЙНА — РОЗЕНА (1935)</span>
+        </div>
+        <div id="infoDesc" class="info-desc">
+            Решение уравнений ОТО для сферической чёрной дыры без экзотической материи. Горловина моста нестабильна и схлопывается быстрее скорости света. Любой радиоимпульс (1420.4 МГц) упирается в горизонт событий и разрушается в сингулярности.
+        </div>
+        <div id="formulaBox" class="formula-box">
+            ds² = -c²dt² + dr² / (1 - r_s/r) + r²dΩ²  |  ρ_exotic = 0 (НЕПРОХОДИМ)
+        </div>
+    </div>
+</div>
+
+<script>
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+    }
+
+    // Elements
+    const statusBadge = document.getElementById('statusBadge');
+    const throatVal = document.getElementById('throatVal');
+    const horizonSub = document.getElementById('horizonSub');
+    const txPercent = document.getElementById('txPercent');
+    const stabilityFill = document.getElementById('stabilityFill');
+    const redshiftSub = document.getElementById('redshiftSub');
+    const exoticSlider = document.getElementById('exoticSlider');
+    const massSlider = document.getElementById('massSlider');
+    const exoticHint = document.getElementById('exoticHint');
+    const massHint = document.getElementById('massHint');
+    const powerBtn = document.getElementById('powerBtn');
+    const pingBtn = document.getElementById('pingBtn');
+    const infoTitle = document.getElementById('infoTitle');
+    const infoDesc = document.getElementById('infoDesc');
+    const formulaBox = document.getElementById('formulaBox');
+
+    const whCanvas = document.getElementById('wormholeCanvas');
+    const whCtx = whCanvas.getContext('2d');
+    const scopeCanvas = document.getElementById('scopeCanvas');
+    const scopeCtx = scopeCanvas.getContext('2d');
+
+    function resizeCanvases() {
+        whCanvas.width = whCanvas.parentElement.clientWidth;
+        scopeCanvas.width = scopeCanvas.parentElement.clientWidth;
+    }
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
+
+    // Simulation state
+    let exoticLevel = 0;   // 0..100
+    let massSolar = 50;    // 10..500 M_sun
+    let stability = 0;     // 0..1
+    let throatRadiusKm = 0;
+    let rsKm = 147.7;
+
+    // 3D Camera rotation
+    let camPitch = 0.52;   // tilt angle
+    let camYaw = 0.0;
+    let isDragging = false;
+    let lastX = 0, lastY = 0;
+
+    const whBox = document.getElementById('wormholeBox');
+    whBox.addEventListener('pointerdown', (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        whBox.setPointerCapture(e.pointerId);
+    });
+    whBox.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        camYaw += dx * 0.01;
+        camPitch = Math.max(0.18, Math.min(1.15, camPitch + dy * 0.008));
+    });
+    whBox.addEventListener('pointerup', () => { isDragging = false; });
+
+    // Radio Pulse Particles traveling through the bridge
+    const pulses = [];
+    function spawnPulse(isManualBurst = false) {
+        const count = isManualBurst ? 12 : 1;
+        for (let i = 0; i < count; i++) {
+            pulses.push({
+                u: 1.0, // from +1.0 (top sheet) to -1.0 (bottom sheet)
+                angle: (Math.random() * Math.PI * 2),
+                speed: 0.012 + Math.random() * 0.005,
+                isBurst: isManualBurst,
+                alive: true,
+                crushed: false,
+                crushTimer: 0
+            });
+        }
+    }
+
+    // Audio Synthesizer (Web Audio API)
+    let audioCtx = null;
+    let isAudioOn = false;
+    let droneOsc = null;
+    let subOsc = null;
+    let noiseNode = null;
+    let noiseFilter = null;
+    let masterGain = null;
+
+    function initAudio() {
+        if (audioCtx) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.0;
+        masterGain.connect(audioCtx.destination);
+
+        // Gravitational sub-bass drone
+        droneOsc = audioCtx.createOscillator();
+        droneOsc.type = 'sawtooth';
+        droneOsc.frequency.value = 65;
+
+        const droneFilter = audioCtx.createBiquadFilter();
+        droneFilter.type = 'lowpass';
+        droneFilter.frequency.value = 160;
+
+        const droneGain = audioCtx.createGain();
+        droneGain.gain.value = 0.35;
+
+        droneOsc.connect(droneFilter);
+        droneFilter.connect(droneGain);
+        droneGain.connect(masterGain);
+
+        // Casimir Exotic Harmonic
+        subOsc = audioCtx.createOscillator();
+        subOsc.type = 'sine';
+        subOsc.frequency.value = 142.04;
+        const subGain = audioCtx.createGain();
+        subGain.gain.value = 0.25;
+        subOsc.connect(subGain);
+        subGain.connect(masterGain);
+
+        // Cosmic static
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+
+        noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 900;
+        noiseFilter.Q.value = 4.0;
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.value = 0.15;
+
+        noiseNode.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+
+        droneOsc.start();
+        subOsc.start();
+        noiseNode.start();
+    }
+
+    function playPingSound() {
+        if (!audioCtx || !isAudioOn) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'sine';
+
+        if (stability >= 0.5) {
+            // Clean dispersion chirp through the wormhole
+            osc.frequency.setValueAtTime(1420, now);
+            osc.frequency.exponentialRampToValueAtTime(480, now + 0.25);
+            osc.frequency.exponentialRampToValueAtTime(1420, now + 0.55);
+        } else {
+            // Crushed into singularity (falling pitch + cutoff)
+            osc.frequency.setValueAtTime(1100, now);
+            osc.frequency.exponentialRampToValueAtTime(55, now + 0.35);
+        }
+
+        g.gain.setValueAtTime(0.3, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.6);
+    }
+
+    function updatePhysics() {
+        exoticLevel = parseFloat(exoticSlider.value);
+        massSolar = parseFloat(massSlider.value);
+
+        // Schwarzschild radius r_s = 2.953 km per solar mass
+        rsKm = massSolar * 2.953;
+        stability = exoticLevel / 100.0;
+
+        // Open throat radius when exotic matter counteracts gravity
+        if (stability < 0.25) {
+            throatRadiusKm = 0;
+        } else {
+            throatRadiusKm = rsKm * Math.pow((stability - 0.2) / 0.8, 0.85) * 1.25;
+        }
+
+        const tx = stability < 0.28 ? 0 : Math.min(99.9, Math.pow((stability - 0.25) / 0.75, 1.2) * 100);
+
+        // Update UI labels
+        exoticHint.innerText = `${exoticLevel}% (-${(exoticLevel * 0.18).toFixed(2)}×10²⁴ Дж/м³)`;
+        massHint.innerText = `${massSolar} M☉`;
+        throatVal.innerText = throatRadiusKm.toFixed(1);
+        horizonSub.innerText = `Горизонт Шварцшильда r_s = ${rsKm.toFixed(1)} км`;
+
+        stabilityFill.style.width = `${Math.max(6, tx)}%`;
+        txPercent.innerText = `${tx.toFixed(0)}%`;
+
+        if (stability < 0.28) {
+            statusBadge.innerText = "HORIZON COLLAPSED";
+            statusBadge.className = "status-badge";
+            txPercent.style.color = "var(--accent-red)";
+            throatVal.style.color = "var(--accent-red)";
+            redshiftSub.innerText = "Сигнал 1420 МГц гибнет в сингулярности";
+
+            infoTitle.innerText = "🕳 КЛАССИЧЕСКИЙ МОСТ ЭЙНШТЕЙНА — РОЗЕНА (1935)";
+            infoTitle.style.color = "var(--accent-red)";
+            infoDesc.innerText = "Без экзотической материи гравитация мгновенно пережимает горловину. Время жизни моста меньше времени пролёта фотона: радиоволна упирается в горизонт событий и уничтожается.";
+            formulaBox.innerText = "ds² = -(1 - r_s/r)c²dt² + dr²/(1 - r_s/r) + r²dΩ²  |  NEC: ρ + p ≥ 0";
+        } else if (stability < 0.65) {
+            statusBadge.innerText = "QUANTUM FOAM FLUX";
+            statusBadge.className = "status-badge quantum";
+            txPercent.style.color = "var(--accent-amber)";
+            throatVal.style.color = "var(--accent-amber)";
+            const zShift = (2.8 - stability * 2.2).toFixed(2);
+            redshiftSub.innerText = `Красное смещение z = ${zShift} (сильные искажения)`;
+
+            infoTitle.innerText = "⚡️ КВАНТОВАЯ ПЕНА УИЛЕРА (НЕСТАБИЛЬНЫЙ ТУННЕЛЬ)";
+            infoTitle.style.color = "var(--accent-amber)";
+            infoDesc.innerText = "Отрицательной энергии эффекта Казимира пока недостаточно для полной стабилизации. Горловина приоткрылась, но испытывает сильные квантовые флуктуации — проходит лишь часть радиоимпульсов с огромным доплеровским сдвигом.";
+            formulaBox.innerText = "ds² = -e^(2Φ)c²dt² + dr²/(1 - b(r)/r) + r²dΩ²  |  ΔE·Δt ≥ ℏ/2";
+        } else {
+            statusBadge.innerText = "TRAVERSABLE LOCK";
+            statusBadge.className = "status-badge stable";
+            txPercent.style.color = "var(--accent-green)";
+            throatVal.style.color = "var(--accent-cyan)";
+            const outFreq = (1420.4 / (1 + (massSolar / 1200) * (1.1 - stability * 0.5))).toFixed(1);
+            redshiftSub.innerText = `Приём на выходе: ${outFreq} МГц (Чистый канал)`;
+
+            if (massSolar >= 350) {
+                infoTitle.innerText = "🪐 СВЕРХМАССИВНЫЙ МОСТ («ГАРГАНТЮА» / КЕРР)";
+                infoTitle.style.color = "var(--accent-cyan)";
+                infoDesc.innerText = "Сверхмассивная проходимая червоточина. Благодаря огромному радиусу горловины приливные силы на входе минимальны — корабль или радиозонд проходит без разрушения, но с колоссальным гравитационным замедлением времени.";
+                formulaBox.innerText = "r₀ = " + throatRadiusKm.toFixed(0) + " км > r_s  |  Δτ = Δt·√(1 - r_s/r₀)  |  КАНАЛ СТАБИЛЕН";
+            } else {
+                infoTitle.innerText = "🌌 ПРОХОДИМАЯ КРОТОВАЯ НОРА МОРРИСА — ТОРНА (1988)";
+                infoTitle.style.color = "var(--accent-green)";
+                infoDesc.innerText = "Оболочка из экзотической материи с отрицательной плотностью энергии (ρ < 0) создаёт антигравитационное расталкивание и отменяет горизонт событий. Мост открыт в обе стороны для света, радиоволн и материи!";
+                formulaBox.innerText = "T_μν k^μ k^ν < 0 (Нарушение NEC)  |  r₀ = " + throatRadiusKm.toFixed(1) + " км (ОТКРЫТ)";
+            }
+        }
+
+        // Modulate Audio
+        if (audioCtx && isAudioOn) {
+            const now = audioCtx.currentTime;
+            droneOsc.frequency.setTargetAtTime(48 + (massSolar / 15), now, 0.1);
+            subOsc.frequency.setTargetAtTime(110 + stability * 110, now, 0.1);
+            noiseFilter.frequency.setTargetAtTime(400 + stability * 1400, now, 0.1);
+        }
+    }
+
+    exoticSlider.addEventListener('input', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        updatePhysics();
+    });
+    massSlider.addEventListener('input', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        updatePhysics();
+    });
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            exoticSlider.value = btn.getAttribute('data-exotic');
+            massSlider.value = btn.getAttribute('data-mass');
+            updatePhysics();
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+                window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+            }
+        });
+    });
+
+    powerBtn.addEventListener('click', () => {
+        initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        isAudioOn = !isAudioOn;
+        if (isAudioOn) {
+            powerBtn.innerText = "🔇 ВЫКЛ ЗВУК";
+            powerBtn.classList.add('on');
+            masterGain.gain.setTargetAtTime(0.28, audioCtx.currentTime, 0.08);
+        } else {
+            powerBtn.innerText = "🔊 ЗВУК МЕТРИКИ";
+            powerBtn.classList.remove('on');
+            masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.08);
+        }
+    });
+
+    pingBtn.addEventListener('click', () => {
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        spawnPulse(true);
+        playPingSound();
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+            window.Telegram.WebApp.HapticFeedback.notificationOccurred(stability >= 0.5 ? 'success' : 'error');
+        }
+    });
+
+    // 3D Projection Helper
+    function project3D(x, y, z, w, h) {
+        // Rotate around Y (yaw)
+        const cosY = Math.cos(camYaw);
+        const sinY = Math.sin(camYaw);
+        const x1 = x * cosY - z * sinY;
+        const z1 = x * sinY + z * cosY;
+
+        // Rotate around X (pitch)
+        const cosP = Math.cos(camPitch);
+        const sinP = Math.sin(camPitch);
+        const y2 = y * cosP - z1 * sinP;
+        const z2 = y * sinP + z1 * cosP;
+
+        const fov = 340;
+        const dist = 310;
+        const scale = fov / (dist + z2);
+        return {
+            px: w / 2 + x1 * scale,
+            py: h / 2 + y2 * scale,
+            scale: scale,
+            depth: z2
+        };
+    }
+
+    // Compute wormhole radius R(u) where u in [-1, 1] is vertical coordinate
+    function getFunnelRadius(u, time) {
+        const massScale = 0.85 + (massSolar / 500) * 0.35;
+        // Quantum jitter when in Wheeler foam regime
+        let jitter = 0;
+        if (stability >= 0.2 && stability < 0.65) {
+            jitter = Math.sin(u * 14 + time * 12) * 4.5 * (0.65 - stability);
+        }
+
+        const minThroat = stability < 0.25 ? 1.5 : (8 + stability * 36) * massScale;
+        const outerFlair = 128;
+        // Hyperbolic flare from throat at u=0 to flat sheets at u=+-1
+        return minThroat + (outerFlair - minThroat) * Math.pow(Math.abs(u), 1.65) + jitter;
+    }
+
+    let animTime = 0;
+    let spawnTimer = 0;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        animTime += 0.025;
+        if (!isDragging) {
+            camYaw += 0.0045;
+        }
+
+        spawnTimer++;
+        if (spawnTimer % 18 === 0) {
+            spawnPulse(false);
+        }
+
+        // --- 1. RENDER 3D WORMHOLE EMBEDDING DIAGRAM ---
+        const w = whCanvas.width;
+        const h = whCanvas.height;
+        whCtx.fillStyle = '#05070a';
+        whCtx.fillRect(0, 0, w, h);
+
+        // Background stars
+        whCtx.fillStyle = 'rgba(226, 232, 240, 0.25)';
+        for (let i = 0; i < 35; i++) {
+            const sx = ((i * 97) % w);
+            const sy = ((i * 53) % h);
+            whCtx.fillRect(sx, sy, 1.5, 1.5);
+        }
+
+        const uSteps = 18;
+        const aSteps = 24;
+        const heightSpan = 92;
+
+        // Draw Meridians (lines from Universe A to Universe B)
+        for (let ia = 0; ia < aSteps; ia += 2) {
+            const angle = (ia / aSteps) * Math.PI * 2;
+            whCtx.beginPath();
+            for (let iu = 0; iu <= uSteps; iu++) {
+                const u = -1 + (iu / uSteps) * 2; // -1..1
+                // If pinched (classical Schwarzschild), break line at u=0
+                if (stability < 0.25 && Math.abs(u) < 0.09) continue;
+
+                const r = getFunnelRadius(u, animTime);
+                const x = r * Math.cos(angle);
+                const z = r * Math.sin(angle);
+                const y = -u * heightSpan;
+                const p = project3D(x, y, z, w, h);
+                if (iu === 0 || (stability < 0.25 && iu === Math.ceil(uSteps / 2 + 1))) {
+                    whCtx.moveTo(p.px, p.py);
+                } else {
+                    whCtx.lineTo(p.px, p.py);
+                }
+            }
+            whCtx.strokeStyle = stability < 0.28
+                ? 'rgba(255, 42, 85, 0.28)'
+                : (stability < 0.65 ? 'rgba(255, 183, 3, 0.32)' : 'rgba(0, 240, 255, 0.32)');
+            whCtx.lineWidth = 1;
+            whCtx.stroke();
+        }
+
+        // Draw Horizontal Rings (spacetime curvature contours)
+        for (let iu = 0; iu <= uSteps; iu++) {
+            const u = -1 + (iu / uSteps) * 2;
+            const isThroat = Math.abs(u) < 0.08;
+            const r = getFunnelRadius(u, animTime);
+            const y = -u * heightSpan;
+
+            whCtx.beginPath();
+            for (let ia = 0; ia <= aSteps; ia++) {
+                const angle = (ia / aSteps) * Math.PI * 2;
+                const x = r * Math.cos(angle);
+                const z = r * Math.sin(angle);
+                const p = project3D(x, y, z, w, h);
+                if (ia === 0) whCtx.moveTo(p.px, p.py);
+                else whCtx.lineTo(p.px, p.py);
+            }
+
+            if (isThroat) {
+                whCtx.strokeStyle = stability < 0.28 ? '#ff2a55' : (stability < 0.65 ? '#ffb703' : '#00ff66');
+                whCtx.lineWidth = 2.4;
+            } else {
+                const alpha = 0.18 + (1 - Math.abs(u)) * 0.35;
+                whCtx.strokeStyle = stability < 0.28
+                    ? `rgba(255, 80, 110, ${alpha})`
+                    : `rgba(0, 240, 255, ${alpha})`;
+                whCtx.lineWidth = 1.1;
+            }
+            whCtx.stroke();
+        }
+
+        // Draw Exotic Matter Casimir Ring at the throat (u = 0)
+        if (exoticLevel > 5) {
+            const rEx = getFunnelRadius(0, animTime) + 6;
+            whCtx.beginPath();
+            for (let ia = 0; ia <= 36; ia++) {
+                const angle = (ia / 36) * Math.PI * 2 + animTime * 2;
+                const wobble = Math.sin(ia * 3 + animTime * 6) * 2.5;
+                const x = (rEx + wobble) * Math.cos(angle);
+                const z = (rEx + wobble) * Math.sin(angle);
+                const p = project3D(x, 0, z, w, h);
+                if (ia === 0) whCtx.moveTo(p.px, p.py);
+                else whCtx.lineTo(p.px, p.py);
+            }
+            whCtx.strokeStyle = `rgba(181, 101, 255, ${0.3 + stability * 0.7})`;
+            whCtx.lineWidth = 2;
+            whCtx.setLineDash([5, 4]);
+            whCtx.stroke();
+            whCtx.setLineDash([]);
+        }
+
+        // Update and Draw Radio Pulses (1420 MHz packets)
+        for (let i = pulses.length - 1; i >= 0; i--) {
+            const pt = pulses[i];
+            if (!pt.crushed) {
+                pt.u -= pt.speed;
+                pt.angle += 0.03;
+
+                // Check throat passage at u near 0
+                if (Math.abs(pt.u) < 0.06 && stability < 0.28) {
+                    pt.crushed = true;
+                    pt.crushTimer = 18;
+                } else if (Math.abs(pt.u) < 0.04 && stability < 0.6 && Math.random() > stability * 1.3) {
+                    pt.crushed = true;
+                    pt.crushTimer = 15;
+                }
+            } else {
+                pt.crushTimer--;
+                if (pt.crushTimer <= 0) {
+                    pulses.splice(i, 1);
+                    continue;
+                }
+            }
+
+            if (pt.u < -1.05) {
+                pulses.splice(i, 1);
+                continue;
+            }
+
+            const r = getFunnelRadius(pt.u, animTime);
+            const x = r * Math.cos(pt.angle);
+            const z = r * Math.sin(pt.angle);
+            const y = -pt.u * heightSpan;
+            const proj = project3D(x, y, z, w, h);
+
+            whCtx.beginPath();
+            if (pt.crushed) {
+                whCtx.fillStyle = '#ff2a55';
+                whCtx.arc(proj.px + (Math.random() - 0.5) * 6, proj.py + (Math.random() - 0.5) * 6, 3.5, 0, Math.PI * 2);
+            } else {
+                whCtx.fillStyle = pt.isBurst ? '#00ff66' : '#00f0ff';
+                whCtx.arc(proj.px, proj.py, pt.isBurst ? 4.2 : 2.8, 0, Math.PI * 2);
+            }
+            whCtx.fill();
+        }
+
+        // Labels for Universe A and Universe B
+        whCtx.fillStyle = 'rgba(226, 232, 240, 0.7)';
+        whCtx.font = '10px monospace';
+        whCtx.fillText('ЛИСТ А: НАША ВСЕЛЕННАЯ (TX 1420.4 MHz)', 10, 34);
+        whCtx.fillText('ЛИСТ Б: УДАЛЁННЫЙ СЕКТОР ГАЛАКТИКИ (RX)', 10, h - 10);
+
+        // --- 2. RENDER OSCILLOSCOPE & DOPPLER SPECTRUM ---
+        const sw = scopeCanvas.width;
+        const sh = scopeCanvas.height;
+        scopeCtx.fillStyle = '#05070a';
+        scopeCtx.fillRect(0, 0, sw, sh);
+
+        // Grid
+        scopeCtx.strokeStyle = '#101726';
+        scopeCtx.lineWidth = 1;
+        scopeCtx.beginPath();
+        for (let x = 0; x < sw; x += 36) { scopeCtx.moveTo(x, 0); scopeCtx.lineTo(x, sh); }
+        for (let y = 0; y < sh; y += 24) { scopeCtx.moveTo(0, y); scopeCtx.lineTo(sw, y); }
+        scopeCtx.stroke();
+
+        // Divider between Input Wave (left) and Output Wave (right)
+        scopeCtx.strokeStyle = '#1e293b';
+        scopeCtx.beginPath();
+        scopeCtx.moveTo(sw / 2, 0);
+        scopeCtx.lineTo(sw / 2, sh);
+        scopeCtx.stroke();
+
+        // Draw Input Carrier Wave (Left Half: Universe A)
+        scopeCtx.beginPath();
+        scopeCtx.strokeStyle = '#00f0ff';
+        scopeCtx.lineWidth = 1.6;
+        for (let x = 0; x < sw / 2; x++) {
+            const y = sh / 2 + Math.sin(x * 0.16 - animTime * 6) * 20 + (Math.random() - 0.5) * 3;
+            if (x === 0) scopeCtx.moveTo(x, y);
+            else scopeCtx.lineTo(x, y);
+        }
+        scopeCtx.stroke();
+
+        // Draw Output Redshifted / Attenuated Wave (Right Half: Universe B)
+        scopeCtx.beginPath();
+        scopeCtx.strokeStyle = stability < 0.28 ? '#ff2a55' : (stability < 0.65 ? '#ffb703' : '#00ff66');
+        scopeCtx.lineWidth = 1.8;
+        const redshiftFactor = Math.max(0.04, 0.16 / (1 + (massSolar / 400)));
+        const outAmp = stability < 0.28 ? 1.5 : 22 * Math.pow((stability - 0.2) / 0.8, 0.9);
+        for (let x = Math.floor(sw / 2); x < sw; x++) {
+            const noise = (Math.random() - 0.5) * (stability < 0.65 ? 14 : 4);
+            const y = sh / 2 + Math.sin(x * redshiftFactor - animTime * 4) * outAmp + noise;
+            if (x === Math.floor(sw / 2)) scopeCtx.moveTo(x, y);
+            else scopeCtx.lineTo(x, y);
+        }
+        scopeCtx.stroke();
+
+        scopeCtx.fillStyle = '#94a3b8';
+        scopeCtx.font = '10px monospace';
+        scopeCtx.fillText('ВХОД: 1420.4 МГц', 8, sh - 8);
+        scopeCtx.fillText(stability < 0.28 ? 'ВЫХОД: ОБРЫВ МЕТРИКИ' : 'ВЫХОД ПОСЛЕ ГОРЛОВИНЫ', sw / 2 + 8, sh - 8);
+    }
+
+    updatePhysics();
+    animate();
+</script>
+</body>
+</html>
